@@ -9,7 +9,7 @@ import io
 # ==========================================
 # 1. WEB APP CONFIG & DARK AESTHETIC CSS
 # ==========================================
-st.set_page_config(page_title="OceanTailor AI v2.3", layout="wide", page_icon="🌊")
+st.set_page_config(page_title="OceanTailor AI v2.3.1", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
@@ -42,7 +42,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC FUNCTIONS (GROQ VERSION)
+# 2. LOGIC FUNCTIONS
 # ==========================================
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
@@ -60,6 +60,9 @@ def create_docx(text):
 
 def analyze_resume(base_text, jd, api_key):
     client = Groq(api_key=api_key)
+    # Updated to a more stable Llama 3.1 model
+    model_name = "llama-3.1-8b-instant" 
+    
     prompt = f"""
     Analyze the Resume against the JD. 
     Return ONLY a JSON object with these keys: 
@@ -69,7 +72,7 @@ def analyze_resume(base_text, jd, api_key):
     Resume: {base_text}
     """
     completion = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model=model_name,
         messages=[{"role": "system", "content": "You are an ATS expert. Return JSON only."},
                   {"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
@@ -78,6 +81,9 @@ def analyze_resume(base_text, jd, api_key):
 
 def tailor_resume(base_text, company, jd, api_key):
     client = Groq(api_key=api_key)
+    # Updated to a more stable Llama 3.1 model
+    model_name = "llama-3.1-8b-instant"
+    
     prompt = f"""
     You are an expert ATS resume writer.
     Company: {company}
@@ -90,7 +96,7 @@ def tailor_resume(base_text, company, jd, api_key):
     Return ONLY the final resume text.
     """
     completion = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model=model_name,
         messages=[{"role": "system", "content": "You are a world-class resume writer."},
                   {"role": "user", "content": prompt}]
     )
@@ -105,8 +111,8 @@ if 'profiles' not in st.session_state:
 # ==========================================
 # 4. UI LAYOUT
 # ==========================================
-st.title("🌊 OceanTailor AI v2.3")
-st.markdown("#### *Midnight Free Edition: Powered by Groq Llama 3*")
+st.title("🌊 OceanTailor AI v2.3.1")
+st.markdown("#### *Midnight Free Edition: Powered by Groq Llama 3.1*")
 
 with st.sidebar:
     st.header("👤 User Profiles")
