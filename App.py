@@ -10,7 +10,7 @@ import io
 # ==========================================
 # 1. WEB APP CONFIG & DARK AESTHETIC CSS
 # ==========================================
-st.set_page_config(page_title="OceanTailor AI v2.4", layout="wide", page_icon="🌊")
+st.set_page_config(page_title="OceanTailor AI v2.5", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
@@ -43,7 +43,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC FUNCTIONS (TEMPLATE-AWARE)
+# 2. LOGIC FUNCTIONS
 # ==========================================
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
@@ -51,43 +51,29 @@ def extract_text_from_pdf(file):
 
 def create_docx(text):
     doc = Document()
-    
-    # Set global font
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(11)
-
     lines = text.split('\n')
     for line in lines:
         line = line.strip()
-        if not line:
-            continue
-            
-        # MAIN HEADINGS (e.g., # EXPERIENCE)
+        if not line: continue
         if line.startswith('# '):
             heading = doc.add_heading(line.replace('# ', ''), level=1)
             heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            # Styling the heading to be a dark blue/gray
             run = heading.runs[0]
             run.font.color.rgb = RGBColor(15, 23, 42)
             run.font.size = Pt(14)
-
-        # SUB-HEADINGS (e.g., ## Job Title)
         elif line.startswith('## '):
             p = doc.add_paragraph()
             run = p.add_run(line.replace('## ', ''))
             run.bold = True
             run.font.size = Pt(12)
-
-        # BULLET POINTS (e.g., * Accomplished X)
         elif line.startswith('* ') or line.startswith('- '):
             p = doc.add_paragraph(line.replace('* ', '').replace('- ', ''), style='List Bullet')
             p.paragraph_format.space_after = Pt(4)
-
-        # NORMAL TEXT
         else:
             doc.add_paragraph(line)
-
     bio = io.BytesIO()
     doc.save(bio)
     return bio.getvalue()
@@ -110,21 +96,12 @@ def tailor_resume(base_text, company, jd, api_key):
     Company: {company}
     JD: {jd}
     Base Resume: {base_text}
-    
-    TASK: Rewrite the resume to be highly optimized for this JD.
-    
-    FORMATTING RULES (STRICT):
-    1. Use '# ' for Main Section Headings (e.g., # EXPERIENCE, # EDUCATION).
-    2. Use '## ' for Job Titles or Degree names (e.g., ## Senior Software Engineer).
-    3. Use '* ' for every bullet point in the experience section.
-    4. Maintain the EXACT same structure as the base resume.
-    5. Use the Google XYZ formula (Accomplished X as measured by Y, by doing Z).
-    
-    Return ONLY the final resume text.
+    TASK: Rewrite the resume. Use '# ' for Main Sections, '## ' for Job Titles, and '* ' for bullets.
+    Maintain EXACT same structure. Use Google XYZ formula. Return ONLY the final text.
     """
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
-        messages=[{"role": "system", "content": "You are a world-class resume writer who uses Markdown markers for formatting."},
+        messages=[{"role": "system", "content": "You are a world-class resume writer."},
                   {"role": "user", "content": prompt}]
     )
     return completion.choices[0].message.content
@@ -138,8 +115,15 @@ if 'profiles' not in st.session_state:
 # ==========================================
 # 4. UI LAYOUT
 # ==========================================
-st.title("🌊 OceanTailor AI v2.4")
-st.markdown("#### *Professional Template Edition: Powered by Groq Llama 3.1*")
+st.title("🌊 OceanTailor AI v2.5")
+st.markdown("#### *Professional Automated Edition*")
+
+# --- PERMANENT API KEY IMPLEMENTATION ---
+if "GROQ_API_KEY" in st.secrets:
+    api_key = st.secrets["GROQ_API_KEY"]
+else:
+    st.error("❌ API Key missing! Please add 'GROQ_API_KEY' to your Streamlit Cloud Secrets.")
+    st.stop()
 
 with st.sidebar:
     st.header("👤 User Profiles")
@@ -154,7 +138,6 @@ with st.sidebar:
 
 if active_profile:
     st.markdown(f"<div class='profile-card'><b>Active Profile:</b> {active_profile}</div>", unsafe_allow_html=True)
-    api_key = st.text_input("🔑 Enter Groq API Key", type="password")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -174,8 +157,8 @@ if active_profile:
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
         if st.button("🔍 Analyze Match Score"):
-            if not api_key or not st.session_state.profiles[active_profile] or not jd:
-                st.error("Missing API Key, Resume, or JD!")
+            if not st.session_state.profiles[active_profile] or not jd:
+                st.error("Missing Resume or JD!")
             else:
                 with st.spinner("Analyzing..."):
                     try:
@@ -185,8 +168,8 @@ if active_profile:
 
     with btn_col2:
         if st.button("🚀 Tailor My Resume"):
-            if not api_key or not st.session_state.profiles[active_profile] or not jd:
-                st.error("Missing API Key, Resume, or JD!")
+            if not st.session_state.profiles[active_profile] or not jd:
+                st.error("Missing Resume or JD!")
             else:
                 with st.spinner("Crafting..."):
                     try:
@@ -208,12 +191,9 @@ if active_profile:
     if 'final_text' in st.session_state:
         st.divider()
         st.subheader("✨ Your Tailored Resume Preview")
-        
-        # Use Markdown instead of Text Area so the user can see the formatting!
         st.markdown("---")
         st.markdown(st.session_state.final_text)
         st.markdown("---")
-        
         docx_b = create_docx(st.session_state.final_text)
         st.download_button("📥 Download Professional Word (.docx)", data=docx_b, file_name=f"Tailored_{comp}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 else:
