@@ -2,14 +2,14 @@ import streamlit as st
 from PyPDF2 import PdfReader
 from docx import Document
 from docx.shared import Pt
-import google.generativeai as genai
+from groq import Groq
 import json
 import io
 
 # ==========================================
 # 1. WEB APP CONFIG & DARK AESTHETIC CSS
 # ==========================================
-st.set_page_config(page_title="OceanTailor AI v2.2.1", layout="wide", page_icon="🌊")
+st.set_page_config(page_title="OceanTailor AI v2.3", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
@@ -42,7 +42,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC FUNCTIONS (UPDATED TO GEMINI 1.5)
+# 2. LOGIC FUNCTIONS (GROQ VERSION)
 # ==========================================
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
@@ -59,18 +59,25 @@ def create_docx(text):
     return bio.getvalue()
 
 def analyze_resume(base_text, jd, api_key):
-    genai.configure(api_key=api_key)
-    # UPDATED MODEL NAME HERE
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    prompt = f"Analyze this Resume against this JD. Return ONLY a JSON object: {{'match_score': int, 'missing_keywords': [], 'improvement_tips': []}}. JD: {jd} Resume: {base_text}"
-    response = model.generate_content(prompt)
-    clean_json = response.text.replace('```json', '').replace('```', '').strip()
-    return json.loads(clean_json)
+    client = Groq(api_key=api_key)
+    prompt = f"""
+    Analyze the Resume against the JD. 
+    Return ONLY a JSON object with these keys: 
+    'match_score' (number), 'missing_keywords' (list), 'improvement_tips' (list).
+    
+    JD: {jd} 
+    Resume: {base_text}
+    """
+    completion = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[{"role": "system", "content": "You are an ATS expert. Return JSON only."},
+                  {"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+    return json.loads(completion.choices[0].message.content)
 
 def tailor_resume(base_text, company, jd, api_key):
-    genai.configure(api_key=api_key)
-    # UPDATED MODEL NAME HERE
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    client = Groq(api_key=api_key)
     prompt = f"""
     You are an expert ATS resume writer.
     Company: {company}
@@ -79,12 +86,15 @@ def tailor_resume(base_text, company, jd, api_key):
     
     TASK: Rewrite the resume to be highly optimized for this JD.
     CRITICAL: Maintain the EXACT same sections and structure as the base resume. 
-    Do not add new sections. Only rewrite the bullet points using the Google XYZ formula 
-    (Accomplished X as measured by Y, by doing Z) and integrate keywords from the JD.
+    Use the Google XYZ formula (Accomplished X as measured by Y, by doing Z).
     Return ONLY the final resume text.
     """
-    response = model.generate_content(prompt)
-    return response.text
+    completion = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[{"role": "system", "content": "You are a world-class resume writer."},
+                  {"role": "user", "content": prompt}]
+    )
+    return completion.choices[0].message.content
 
 # ==========================================
 # 3. PROFILE MANAGEMENT
@@ -95,8 +105,8 @@ if 'profiles' not in st.session_state:
 # ==========================================
 # 4. UI LAYOUT
 # ==========================================
-st.title("🌊 OceanTailor AI v2.2.1")
-st.markdown("#### *Midnight Free Edition: Powered by Gemini 1.5 Flash*")
+st.title("🌊 OceanTailor AI v2.3")
+st.markdown("#### *Midnight Free Edition: Powered by Groq Llama 3*")
 
 with st.sidebar:
     st.header("👤 User Profiles")
@@ -112,8 +122,8 @@ with st.sidebar:
 if active_profile:
     st.markdown(f"<div class='profile-card'><b>Active Profile:</b> {active_profile}</div>", unsafe_allow_html=True)
     
-    api_key = st.text_input("🔑 Enter Google Gemini API Key", type="password")
-    st.caption("Get a free key at: aistudio.google.com")
+    api_key = st.text_input("🔑 Enter Groq API Key", type="password")
+    st.caption("Get a free key at: console.groq.com")
     
     col1, col2 = st.columns(2)
     with col1:
