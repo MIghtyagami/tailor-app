@@ -1,7 +1,8 @@
 import streamlit as st
 from PyPDF2 import PdfReader
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from groq import Groq
 import json
 import io
@@ -9,7 +10,7 @@ import io
 # ==========================================
 # 1. WEB APP CONFIG & DARK AESTHETIC CSS
 # ==========================================
-st.set_page_config(page_title="OceanTailor AI v2.3.1", layout="wide", page_icon="🌊")
+st.set_page_config(page_title="OceanTailor AI v2.4", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
@@ -42,7 +43,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC FUNCTIONS
+# 2. LOGIC FUNCTIONS (TEMPLATE-AWARE)
 # ==========================================
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
@@ -50,29 +51,52 @@ def extract_text_from_pdf(file):
 
 def create_docx(text):
     doc = Document()
+    
+    # Set global font
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(11)
-    doc.add_paragraph(text)
+
+    lines = text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # MAIN HEADINGS (e.g., # EXPERIENCE)
+        if line.startswith('# '):
+            heading = doc.add_heading(line.replace('# ', ''), level=1)
+            heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            # Styling the heading to be a dark blue/gray
+            run = heading.runs[0]
+            run.font.color.rgb = RGBColor(15, 23, 42)
+            run.font.size = Pt(14)
+
+        # SUB-HEADINGS (e.g., ## Job Title)
+        elif line.startswith('## '):
+            p = doc.add_paragraph()
+            run = p.add_run(line.replace('## ', ''))
+            run.bold = True
+            run.font.size = Pt(12)
+
+        # BULLET POINTS (e.g., * Accomplished X)
+        elif line.startswith('* ') or line.startswith('- '):
+            p = doc.add_paragraph(line.replace('* ', '').replace('- ', ''), style='List Bullet')
+            p.paragraph_format.space_after = Pt(4)
+
+        # NORMAL TEXT
+        else:
+            doc.add_paragraph(line)
+
     bio = io.BytesIO()
     doc.save(bio)
     return bio.getvalue()
 
 def analyze_resume(base_text, jd, api_key):
     client = Groq(api_key=api_key)
-    # Updated to a more stable Llama 3.1 model
-    model_name = "llama-3.1-8b-instant" 
-    
-    prompt = f"""
-    Analyze the Resume against the JD. 
-    Return ONLY a JSON object with these keys: 
-    'match_score' (number), 'missing_keywords' (list), 'improvement_tips' (list).
-    
-    JD: {jd} 
-    Resume: {base_text}
-    """
+    prompt = f"Analyze Resume vs JD. Return ONLY JSON: {{'match_score': int, 'missing_keywords': [], 'improvement_tips': []}}. JD: {jd} Resume: {base_text}"
     completion = client.chat.completions.create(
-        model=model_name,
+        model="llama-3.1-8b-instant",
         messages=[{"role": "system", "content": "You are an ATS expert. Return JSON only."},
                   {"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
@@ -81,9 +105,6 @@ def analyze_resume(base_text, jd, api_key):
 
 def tailor_resume(base_text, company, jd, api_key):
     client = Groq(api_key=api_key)
-    # Updated to a more stable Llama 3.1 model
-    model_name = "llama-3.1-8b-instant"
-    
     prompt = f"""
     You are an expert ATS resume writer.
     Company: {company}
@@ -91,13 +112,19 @@ def tailor_resume(base_text, company, jd, api_key):
     Base Resume: {base_text}
     
     TASK: Rewrite the resume to be highly optimized for this JD.
-    CRITICAL: Maintain the EXACT same sections and structure as the base resume. 
-    Use the Google XYZ formula (Accomplished X as measured by Y, by doing Z).
+    
+    FORMATTING RULES (STRICT):
+    1. Use '# ' for Main Section Headings (e.g., # EXPERIENCE, # EDUCATION).
+    2. Use '## ' for Job Titles or Degree names (e.g., ## Senior Software Engineer).
+    3. Use '* ' for every bullet point in the experience section.
+    4. Maintain the EXACT same structure as the base resume.
+    5. Use the Google XYZ formula (Accomplished X as measured by Y, by doing Z).
+    
     Return ONLY the final resume text.
     """
     completion = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "system", "content": "You are a world-class resume writer."},
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "system", "content": "You are a world-class resume writer who uses Markdown markers for formatting."},
                   {"role": "user", "content": prompt}]
     )
     return completion.choices[0].message.content
@@ -111,8 +138,8 @@ if 'profiles' not in st.session_state:
 # ==========================================
 # 4. UI LAYOUT
 # ==========================================
-st.title("🌊 OceanTailor AI v2.3.1")
-st.markdown("#### *Midnight Free Edition: Powered by Groq Llama 3.1*")
+st.title("🌊 OceanTailor AI v2.4")
+st.markdown("#### *Professional Template Edition: Powered by Groq Llama 3.1*")
 
 with st.sidebar:
     st.header("👤 User Profiles")
@@ -127,9 +154,7 @@ with st.sidebar:
 
 if active_profile:
     st.markdown(f"<div class='profile-card'><b>Active Profile:</b> {active_profile}</div>", unsafe_allow_html=True)
-    
     api_key = st.text_input("🔑 Enter Groq API Key", type="password")
-    st.caption("Get a free key at: console.groq.com")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -182,11 +207,14 @@ if active_profile:
 
     if 'final_text' in st.session_state:
         st.divider()
-        st.subheader("✨ Your Tailored Resume Content")
-        st.info("💡 **Pro Tip:** Copy the text below and paste it into your original resume template to keep your exact design!")
-        st.text_area("Preview", st.session_state.final_text, height=400)
+        st.subheader("✨ Your Tailored Resume Preview")
+        
+        # Use Markdown instead of Text Area so the user can see the formatting!
+        st.markdown("---")
+        st.markdown(st.session_state.final_text)
+        st.markdown("---")
         
         docx_b = create_docx(st.session_state.final_text)
-        st.download_button("📥 Download as Word (.docx)", data=docx_b, file_name=f"Tailored_{comp}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        st.download_button("📥 Download Professional Word (.docx)", data=docx_b, file_name=f"Tailored_{comp}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 else:
     st.info("👈 Please create or select a profile from the sidebar to begin.")
