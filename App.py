@@ -9,7 +9,7 @@ import io
 # ==========================================
 # 1. WEB APP CONFIG & DARK AESTHETIC CSS
 # ==========================================
-st.set_page_config(page_title="OceanTailor AI v2.2", layout="wide", page_icon="🌊")
+st.set_page_config(page_title="OceanTailor AI v2.2.1", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
@@ -42,7 +42,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC FUNCTIONS (GEMINI VERSION)
+# 2. LOGIC FUNCTIONS (UPDATED TO GEMINI 1.5)
 # ==========================================
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
@@ -60,16 +60,17 @@ def create_docx(text):
 
 def analyze_resume(base_text, jd, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    # UPDATED MODEL NAME HERE
+    model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = f"Analyze this Resume against this JD. Return ONLY a JSON object: {{'match_score': int, 'missing_keywords': [], 'improvement_tips': []}}. JD: {jd} Resume: {base_text}"
     response = model.generate_content(prompt)
-    # Clean JSON response from Gemini (removes ```json blocks)
     clean_json = response.text.replace('```json', '').replace('```', '').strip()
     return json.loads(clean_json)
 
 def tailor_resume(base_text, company, jd, api_key):
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    # UPDATED MODEL NAME HERE
+    model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = f"""
     You are an expert ATS resume writer.
     Company: {company}
@@ -94,8 +95,8 @@ if 'profiles' not in st.session_state:
 # ==========================================
 # 4. UI LAYOUT
 # ==========================================
-st.title("🌊 OceanTailor AI v2.2")
-st.markdown("#### *Midnight Free Edition: Powered by Google Gemini*")
+st.title("🌊 OceanTailor AI v2.2.1")
+st.markdown("#### *Midnight Free Edition: Powered by Gemini 1.5 Flash*")
 
 with st.sidebar:
     st.header("👤 User Profiles")
@@ -169,7 +170,6 @@ if active_profile:
         st.info("💡 **Pro Tip:** Copy the text below and paste it into your original resume template to keep your exact design!")
         st.text_area("Preview", st.session_state.final_text, height=400)
         
-        # Word Export
         docx_b = create_docx(st.session_state.final_text)
         st.download_button("📥 Download as Word (.docx)", data=docx_b, file_name=f"Tailored_{comp}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 else:
